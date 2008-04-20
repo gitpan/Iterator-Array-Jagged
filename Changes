@@ -1,5 +1,10 @@
 Revision history for Perl extension Iterator::Array::Jagged.
 
+0.03  2008-04-19
+	- Updated makefile because of several CPAN::Reporter
+	  errors complaining about the Makefile.PL being out
+	  of sync with the dates in the rest of the files.
+
 0.02  2008-04-18
         - Reduced required version of Perl to 5.5.
 

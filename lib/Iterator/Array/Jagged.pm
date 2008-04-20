@@ -3,7 +3,7 @@ package Iterator::Array::Jagged;
 
 use strict;
 use warnings 'all';
-our $VERSION = '0.02';
+our $VERSION = '0.03';
 
 
 #==============================================================================
