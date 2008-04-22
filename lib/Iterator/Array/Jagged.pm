@@ -3,7 +3,7 @@ package Iterator::Array::Jagged;
 
 use strict;
 use warnings 'all';
-our $VERSION = '0.03';
+our $VERSION = '0.04';
 
 
 #==============================================================================
@@ -71,6 +71,105 @@ sub next
 	return @parts;
 }# end next()
 
+
+#==============================================================================
+sub permute
+{
+	my ($class, $func, @data) = @_;
+	
+	my @idx = map { 0 } 0...scalar(@data) - 1;
+	my @sizes = map { scalar(@$_) - 1 } @data;
+	my $max = scalar(@data);
+	PERMUTATION: while( 1 )
+	{
+		# Prepare a 'set':
+		my @parts = ();
+		for my $num ( 0...$max - 1 )
+		{
+			push @parts, $data[ $num ]->[ $idx[ $num ] ];
+		}# end for()
+		
+		# Execute 'func':
+		$func->( @parts );
+		
+		# Increment or finish:
+		my $to_increment = 0;
+		INCR: while( 1 )
+		{
+			if( $idx[ $to_increment ] < $sizes[ $to_increment ] )
+			{
+				$idx[ $to_increment ]++;
+				last INCR;
+			}
+			else
+			{
+				$idx[ $to_increment ] = 0;
+				if( $to_increment + 1 < $max )
+				{
+					$to_increment += 1;
+					next INCR;
+				}
+				else
+				{
+					last PERMUTATION;
+				}# end if()
+			}# end if()
+		}# end while()
+		
+		next PERMUTATION;
+	}# end while()
+	
+}# end permute()
+
+
+#==============================================================================
+sub get_iterator
+{
+	my ($class, @data) = @_;
+	
+	my @idx = map { 0 } 0...scalar(@data) - 1;
+	my @sizes = map { scalar(@$_) - 1 } @data;
+	my $max = scalar(@data);
+	my $is_finished = 0;
+	
+	return sub {
+		return if $is_finished;
+		# Prepare a 'set':
+		my @parts = ();
+		for my $num ( 0...$max - 1 )
+		{
+			push @parts, $data[ $num ]->[ $idx[ $num ] ];
+		}# end for()
+		
+		# Increment or finish:
+		my $to_increment = 0;
+		INCR: while( 1 )
+		{
+			if( $idx[ $to_increment ] < $sizes[ $to_increment ] )
+			{
+				$idx[ $to_increment ]++;
+				last INCR;
+			}
+			else
+			{
+				$idx[ $to_increment ] = 0;
+				if( $to_increment + 1 < $max )
+				{
+					$to_increment += 1;
+					next INCR;
+				}
+				else
+				{
+					$is_finished = 1;
+				}# end if()
+			}# end if()
+		}# end while()
+		
+		# Finally return the parts:
+		return @parts;
+	};# end sub{...}
+}# end get_iterator()
+
 1; #return true:
 
 __END__
@@ -79,7 +178,7 @@ __END__
 
 =head1 NAME
 
-Iterator::Array::Jagged - Iterate through multiple jagged arrays
+Iterator::Array::Jagged - Quickly permute and iterate through multiple jagged arrays.
 
 =head1 SYNOPSIS
 
@@ -97,13 +196,27 @@ Iterator::Array::Jagged - Iterate through multiple jagged arrays
 		push @data, \@set;
 	}# end for()
 	
+	# Iterator in object-oriented mode:
 	my $iterator = Iterator::Array::Jagged->new( data => \@data );
 	while( my @set = $iterator->next )
 	{
 		print "Next set: '" . join("&", @set) . "'\n";
 	}# end while()
+	
+	# Iterator is a subref:
+	my $itersub = Iterator::Array::Jagged->get_iterator( data );
+	while( my @set = $itersub->() )
+	{
+		print "Next set: '" . join("&", @set) . "'\n";
+	}# end while()
+	
+	# Functional callback style:
+	Iterator::Array::Jagged->permute(sub {
+		my (@set) = @_;
+		print "Next set: '" . join("&", @set) . "'\n";
+	}, @data );
 
-The above code prints the following:
+Each example in the code above code prints the following:
 
 	Next set: 'var1=val1&var2=val1&var3=val1'
 	Next set: 'var1=val2&var2=val1&var3=val1'
@@ -131,6 +244,107 @@ that you wish to iterate through.
 =head2 next( )
 
 Returns an array representing the next iteration of the permutation of your data set.  See the synopsis for an example.
+
+=head2 get_iterator( @data )
+
+Returns a coderef that, when called, returns the next set of data until there are no more permutations.  See the synopsis for an example.
+
+=head2 permute( $subref, @data )
+
+Calls C<$subref> for each permutation in C<@data>.  This is currently B<BY FAR THE FASTEST METHOD AVAILABLE>.
+
+=head1 BENCHMARKS
+
+After the initial release of Iterator::Array::Jagged, some people were wondering if there was any benefit to using
+I::A::J over another older module L<Algorithm::Loops> and its C<NestedLoops> method.  So I did some benchmarking and found
+some mixed results.
+
+											Rate I::A::J OO A::L::NL func I::A::J iterator A::L::NL iterator I::A::J permute
+	I::A::J OO        4.19/s         --           -3%             -19%              -29%            -45%
+	A::L::NL func     4.32/s         3%            --             -16%              -27%            -43%
+	I::A::J iterator  5.15/s        23%           19%               --              -12%            -32%
+	A::L::NL iterator 5.88/s        40%           36%              14%                --            -22%
+	I::A::J permute   7.58/s        81%           75%              47%               29%              --
+
+Depending on the size and depth of the jagged array data passed in, the results vary slightly.  However, the order
+in which each method finishes is the same.  Iterator::Array::Jagged->permute fastest by a signifigant margin over
+C<Algorithm::Loops::NestedLoops>.  On the opposite end of the spectrum we have the OO method of Iterator::Array::Jagged
+which comes in at nearly half the speed of the C<permute> option.
+
+The benchmark script I used is shown in the next section.
+
+=head2 The Benchmark Script
+
+	#!/usr/bin/perl -w
+	
+	use strict;
+	use Time::HiRes qw(gettimeofday);
+	use Benchmark qw' :all ';
+	
+	use Algorithm::Loops 'NestedLoops';
+	use Iterator::Array::Jagged;
+	
+	
+	my @data = ();
+	for my $var ( 1...4 )
+	{
+		my @set = ();
+		my $max = $var % 2 ? 10 : 11;
+		for my $val ( 1...$max )
+		{
+			push @set, "var$var=val$val";
+		}# end for()
+		push @data, \@set;
+	}# end for()
+	
+	cmpthese( 20, {
+		'I::A::J OO'        => sub { do_iterator_array_jagged( @data ) },
+		'A::L::NL iterator' => sub { do_nestedloops_iterator( @data ) },
+		'A::L::NL func'     => sub { do_nestedloops_func( @data ) },
+		'I::A::J permute'   => sub { do_iaj_permute( @data ) },
+		'I::A::J iterator'  => sub { do_iaj_iterator( @data ) },
+	});
+	
+	
+	sub do_iaj_iterator
+	{
+		my $iter = Iterator::Array::Jagged->get_iterator( @_ );
+		while( my @set = $iter->() )
+		{
+		}# end while()
+	}# end do_iaj_iterator()
+	
+	
+	sub do_iaj_permute
+	{
+		Iterator::Array::Jagged->permute( sub { }, @_ );
+	}# end do_iaj_permute()
+	
+	
+	sub do_iterator_array_jagged
+	{
+		my @data = @_;
+		my $iter = Iterator::Array::Jagged->new( data => \@data );
+		while( my $set = $iter->next )
+		{
+		}# end while()
+	}# end do_iterator_array_jagged()
+	
+	
+	sub do_nestedloops_func
+	{
+	  NestedLoops( \@_, sub { } );
+	}# end do_nestedloops_func()
+	
+	
+	sub do_nestedloops_iterator
+	{
+		my @data = @_;
+		my $iter = NestedLoops( \@data );
+		while( my @set = $iter->() )
+		{
+		}# end while()
+	}# end do_nestedloops()
 
 =head1 BUGS
 
