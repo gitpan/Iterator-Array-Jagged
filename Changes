@@ -1,5 +1,16 @@
 Revision history for Perl extension Iterator::Array::Jagged.
 
+0.05 2008-04-22
+	- Adjusted formatting of the POD.
+	- Updated the synopsis to be more clear (Ricardo Signes++).
+	- Fixed some typos in the POD.
+
+0.04 2008-04-21
+	- Added methods permute and get_iterator.
+	- Major performance enhancements.
+	- Updated POD.
+	- Added more tests.
+
 0.03  2008-04-19
 	- Updated makefile because of several CPAN::Reporter
 	  errors complaining about the Makefile.PL being out

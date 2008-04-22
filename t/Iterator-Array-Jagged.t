@@ -37,9 +37,7 @@ use Data::Dumper;
 $count = 0;
 Iterator::Array::Jagged->permute( sub {
   is_deeply( \@_, $expected[$count++] );
-#  push @got, @_;
 }, @data );
-#is_deeply( \@got, \@expected );
 
 
 
